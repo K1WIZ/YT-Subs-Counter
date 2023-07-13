@@ -1,5 +1,4 @@
 /*
- 
   ESP-01 pinout:
 
   GPIO 2 - DataIn
@@ -40,9 +39,8 @@
 // =======================================================================
 const char* ssid     = "";               // SSID of local network
 const char* password = "";             // Password on network
-String ytApiV3Key = "";                // YouTube Data API v3 key generated here: https://console.developers.google.com
-String channelId = "";   // YT channel id
-long utcOffset = -4;                              
+String ytApiV3Key    = "";                // YouTube Data API v3 key generated here: https://console.developers.google.com
+String channelId     = "";   // YT channel id
 // =======================================================================
 
 void setup() 
@@ -50,7 +48,7 @@ void setup()
   Serial.begin(115200);
   initMAX7219();
   sendCmdAll(CMD_SHUTDOWN,1);
-  sendCmdAll(CMD_INTENSITY,8);
+  sendCmdAll(CMD_INTENSITY,0);
   Serial.print("Connecting WiFi ");
   WiFi.begin(ssid, password);
   printStringWithShift(" WiFi ...~",15,font,' ');
@@ -99,13 +97,10 @@ void loop()
     }
   }
   cnt--;
-  updateTime();
+
   int del = 3000;
-  int scrollDel = 20;
-  char txt[10];
-  sprintf(txt,"    %02d:%02d  ",h,m);
-  printStringWithShift(txt,scrollDel,font,' '); // real time
-  delay(del);
+  int scrollDel = 40;
+  
   
   printStringWithShift("  Subscribers: ",scrollDel,font,' '); 
   printValueWithShift(subscriberCount,scrollDel,0);
@@ -136,62 +131,6 @@ void loop()
 
 int dualChar = 0;
 
-unsigned char convertPolish(unsigned char _c)
-{
-  unsigned char c = _c;
-  if(c==196 || c==197 || c==195) {
-    dualChar = c;
-    return 0;
-  }
-  if(dualChar) {
-    switch(_c) {
-      case 133: c = 1+'~'; break; // 'ą'
-      case 135: c = 2+'~'; break; // 'ć'
-      case 153: c = 3+'~'; break; // 'ę'
-      case 130: c = 4+'~'; break; // 'ł'
-      case 132: c = dualChar==197 ? 5+'~' : 10+'~'; break; // 'ń' and 'Ą'
-      case 179: c = 6+'~'; break; // 'ó'
-      case 155: c = 7+'~'; break; // 'ś'
-      case 186: c = 8+'~'; break; // 'ź'
-      case 188: c = 9+'~'; break; // 'ż'
-      //case 132: c = 10+'~'; break; // 'Ą'
-      case 134: c = 11+'~'; break; // 'Ć'
-      case 152: c = 12+'~'; break; // 'Ę'
-      case 129: c = 13+'~'; break; // 'Ł'
-      case 131: c = 14+'~'; break; // 'Ń'
-      case 147: c = 15+'~'; break; // 'Ó'
-      case 154: c = 16+'~'; break; // 'Ś'
-      case 185: c = 17+'~'; break; // 'Ź'
-      case 187: c = 18+'~'; break; // 'Ż'
-      default:  break;
-    }
-    dualChar = 0;
-    return c;
-  }    
-  switch(_c) {
-    case 185: c = 1+'~'; break;
-    case 230: c = 2+'~'; break;
-    case 234: c = 3+'~'; break;
-    case 179: c = 4+'~'; break;
-    case 241: c = 5+'~'; break;
-    case 243: c = 6+'~'; break;
-    case 156: c = 7+'~'; break;
-    case 159: c = 8+'~'; break;
-    case 191: c = 9+'~'; break;
-    case 165: c = 10+'~'; break;
-    case 198: c = 11+'~'; break;
-    case 202: c = 12+'~'; break;
-    case 163: c = 13+'~'; break;
-    case 209: c = 14+'~'; break;
-    case 211: c = 15+'~'; break;
-    case 140: c = 16+'~'; break;
-    case 143: c = 17+'~'; break;
-    case 175: c = 18+'~'; break;
-    default:  break;
-  }
-  return c;
-}
-
 // =======================================================================
 
 int charWidth(char ch, const uint8_t *data)
@@ -216,7 +155,6 @@ int showChar(char ch, const uint8_t *data)
 
 void printCharWithShift(unsigned char c, int shiftDelay, const uint8_t *data, int offs) 
 {
-  c = convertPolish(c);
   if(c < offs || c > MAX_CHAR) return;
   c -= offs;
   int w = showChar(c, data);
@@ -270,12 +208,16 @@ int getYTData()
 {
   WiFiClientSecure client;
   Serial.print("connecting to "); Serial.println(ytHost);
-  if (!client.connect(ytHost, 443)) {
+  client.setInsecure();
+  Serial.println(client.connect(ytHost,443));
+  
+  if (!client.connect(ytHost,443)) {
     Serial.println("connection failed");
     return -1;
   }
   String cmd = String("GET /youtube/v3/channels?part=statistics&id=") + channelId + "&key=" + ytApiV3Key+ " HTTP/1.1\r\n" +
                 "Host: " + ytHost + "\r\nUser-Agent: ESP8266/1.1\r\nConnection: close\r\n\r\n";
+  Serial.println(cmd);
   client.print(cmd);
 
   int repeatCounter = 10;
@@ -286,6 +228,7 @@ int getYTData()
   int startJson=0, dateFound=0;
   while (client.connected() && client.available()) {
     line = client.readStringUntil('\n');
+    Serial.println(line);
     if(line[0]=='{') startJson=1;
     if(startJson) {
       for(int i=0;i<line.length();i++)
@@ -302,31 +245,27 @@ int getYTData()
       localEpoc = (h * 60 * 60 + m * 60 + s);
     }
   }
+  Serial.println(buf);
   client.stop();
 
-  DynamicJsonBuffer jsonBuf;
-  JsonObject &root = jsonBuf.parseObject(buf);
-  if (!root.success()) {
-    Serial.println("parseObject() failed");
-    printStringWithShift("json error!",30,font,' ');
+  DynamicJsonDocument jsonDoc(1024); // Adjust the size based on your JSON data
+  DeserializationError error = deserializeJson(jsonDoc, buf);
+  const JsonObject& root = jsonDoc.as<JsonObject>(); // Change to const reference
+
+  if (error) {
+    Serial.println("deserializeJson() failed");
+    printStringWithShift("json error!", 30, font, ' ');
     delay(10);
     return -1;
   }
-  viewCount       = root["items"]["statistics"]["viewCount"];
+
+  viewCount = root["items"]["statistics"]["viewCount"];
   subscriberCount = root["items"]["statistics"]["subscriberCount"];
-  videoCount      = root["items"]["statistics"]["videoCount"];
+  videoCount = root["items"]["statistics"]["videoCount"];
+  Serial.println(subscriberCount);
   return 0;
 }
 
-// =======================================================================
 
-void updateTime()
-{
-  long curEpoch = localEpoc + ((millis() - localMillisAtUpdate) / 1000);
-  long epoch = round(curEpoch + 3600 * utcOffset + 86400L) % 86400L;
-  h = ((epoch  % 86400L) / 3600) % 24;
-  m = (epoch % 3600) / 60;
-  s = epoch % 60;
-}
 
 // =======================================================================
