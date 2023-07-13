@@ -1,4 +1,17 @@
 /*
+ * 
+ * Written/Improved by:  John Rogers
+ * This code is a derivative work and improvement implementing updated code.
+ * 
+ * To suggest further features, enhancements, please submit a pull request:
+ * https://github.com/K1WIZ/YT-Subs-Counter
+ * 
+ * This code is free to use for all purposes so long as this notice remains in all
+ * copies and derivatives.
+ * 
+ * email: john@wizworks.net
+ * 
+ * 
   ESP-01 pinout:
 
   GPIO 2 - DataIn
