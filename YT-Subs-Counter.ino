@@ -73,62 +73,75 @@ long localEpoc = 0;
 long localMillisAtUpdate = 0;
 int h, m, s;
 String date;
+int scrollCounter = 0;
 
 void loop()
 {
-  if(cnt<=0) {
-    if(getYTData()==0) {
-      cnt = 1;  // data is refreshed every 50 loops
-      if(subscriberCount1h<0) {
-        time1h = time24h = millis();
-        subscriberCount1h = subscriberCount24h = subscriberCount;
-        viewCount24h = viewCount;
-      }
-      if(millis()-time1h>1000*60*60) {
-        time1h = millis();
-        subscriberCount1h = subscriberCount;
-      }
-      if(millis()-time24h>1000*60*60*24) {
-        time24h = millis();
-        subscriberCount24h = subscriberCount;
-        viewCount24h = viewCount;
-      }
-      subsGain1h = subscriberCount-subscriberCount1h;
-      subsGain24h = subscriberCount-subscriberCount24h;
-      viewsGain24h = viewCount-viewCount24h;
+  if (scrollCounter == 0) {
+    if (getYTData() == 0) {
+      scrollCounter = 1; // Set scroll counter to 1 to indicate an initial API call
     }
+  }
+  else {
+    if (scrollCounter >= 50) {
+      if (getYTData() == 0) {
+        scrollCounter = 1; // Reset the scroll counter
+      }
+    }
+    scrollCounter++; // Increment the scroll counter
+  }
+
+  if (cnt <= 0) {
+    if (subscriberCount1h < 0) {
+      time1h = time24h = millis();
+      subscriberCount1h = subscriberCount24h = subscriberCount;
+      viewCount24h = viewCount;
+    }
+    if (millis() - time1h > 1000 * 60 * 60) {
+      time1h = millis();
+      subscriberCount1h = subscriberCount;
+    }
+    if (millis() - time24h > 1000 * 60 * 60 * 24) {
+      time24h = millis();
+      subscriberCount24h = subscriberCount;
+      viewCount24h = viewCount;
+    }
+    subsGain1h = subscriberCount - subscriberCount1h;
+    subsGain24h = subscriberCount - subscriberCount24h;
+    viewsGain24h = viewCount - viewCount24h;
   }
   cnt--;
 
   int del = 3000;
   int scrollDel = 40;
-  
-  
-  printStringWithShift("  Subscribers: ",scrollDel,font,' '); 
-  printValueWithShift(subscriberCount,scrollDel,0);
+
+  printStringWithShift("  Subscribers: ", scrollDel, font, ' ');
+  printValueWithShift(subscriberCount, scrollDel, 0);
   delay(del);
-  if(subsGain1h) {
-    printStringWithShift("  Subscribers gain 1h: ",scrollDel,font,' '); 
-    printValueWithShift(subsGain1h,scrollDel,1);
+  if (subsGain1h) {
+    printStringWithShift("  Subscribers gain 1h: ", scrollDel, font, ' ');
+    printValueWithShift(subsGain1h, scrollDel, 1);
     delay(del);
   }
-  if(subsGain24h) {
-    printStringWithShift("  Subscribers gain 24h: ",scrollDel,font,' '); 
-    printValueWithShift(subsGain24h,scrollDel,1);
+  if (subsGain24h) {
+    printStringWithShift("  Subscribers gain 24h: ", scrollDel, font, ' ');
+    printValueWithShift(subsGain24h, scrollDel, 1);
     delay(del);
   }
-  printStringWithShift("  Views: ",scrollDel,font,' ');
-  printValueWithShift(viewCount,scrollDel,0);
+  printStringWithShift("  Views: ", scrollDel, font, ' ');
+  printValueWithShift(viewCount, scrollDel, 0);
   delay(del);
-  if(viewsGain24h) {
-    printStringWithShift("  Subscribers gain 24h: ",scrollDel,font,' '); 
-    printValueWithShift(subsGain24h,scrollDel,1);
+  if (viewsGain24h) {
+    printStringWithShift("  Subscribers gain 24h: ", scrollDel, font, ' ');
+    printValueWithShift(subsGain24h, scrollDel, 1);
     delay(del);
   }
-  printStringWithShift("  Videos: ",scrollDel,font,' '); 
-  printValueWithShift(videoCount,scrollDel,0);
+  printStringWithShift("  Videos: ", scrollDel, font, ' ');
+  printValueWithShift(videoCount, scrollDel, 0);
   delay(del);
 }
+
+
 // =======================================================================
 
 int dualChar = 0;
