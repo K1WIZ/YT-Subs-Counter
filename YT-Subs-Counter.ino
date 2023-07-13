@@ -16,6 +16,7 @@
 
 #include "Arduino.h"
 #include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
 #include <ArduinoJson.h>
 
 #define NUM_MAX 4
@@ -37,9 +38,9 @@
 // =======================================================================
 // Your config below!
 // =======================================================================
-const char* ssid     = "";   // SSID of local network
-const char* password = "";   // Password on network
-String ytApiV3Key    = "";   // YouTube Data API v3 key generated here: https://console.developers.google.com
+const char* ssid     = "";               // SSID of local network
+const char* password = "";             // Password on network
+String ytApiV3Key    = "";                // YouTube Data API v3 key generated here: https://console.developers.google.com
 String channelId     = "";   // YT channel id
 // =======================================================================
 
@@ -48,7 +49,7 @@ void setup()
   Serial.begin(115200);
   initMAX7219();
   sendCmdAll(CMD_SHUTDOWN,1);
-  sendCmdAll(CMD_INTENSITY,0);
+  sendCmdAll(CMD_INTENSITY, 15); // Set brightness to maximum (15)
   Serial.print("Connecting WiFi ");
   WiFi.begin(ssid, password);
   printStringWithShift(" WiFi ...~",15,font,' ');
@@ -60,6 +61,7 @@ void setup()
   Serial.println("Getting data ...");
   printStringWithShift(" YT ...~",15,font,' ');
 }
+
 // =======================================================================
 
 long viewCount, viewCount24h=-1, viewsGain24h;
@@ -207,62 +209,91 @@ const char *ytHost = "www.googleapis.com";
 int getYTData()
 {
   WiFiClientSecure client;
-  Serial.print("connecting to "); Serial.println(ytHost);
+  Serial.print("Connecting to "); Serial.println(ytHost);
   client.setInsecure();
-  Serial.println(client.connect(ytHost,443));
-  
-  if (!client.connect(ytHost,443)) {
-    Serial.println("connection failed");
+
+  if (!client.connect(ytHost, 443)) {
+    Serial.println("Connection failed");
     return -1;
   }
-  String cmd = String("GET /youtube/v3/channels?part=statistics&id=") + channelId + "&key=" + ytApiV3Key+ " HTTP/1.1\r\n" +
-                "Host: " + ytHost + "\r\nUser-Agent: ESP8266/1.1\r\nConnection: close\r\n\r\n";
+
+  String cmd = String("GET /youtube/v3/channels?part=statistics&id=") + channelId + "&key=" + ytApiV3Key + " HTTP/1.1\r\n" +
+               "Host: " + ytHost + "\r\nUser-Agent: ESP8266/1.1\r\nConnection: close\r\n\r\n";
   Serial.println(cmd);
   client.print(cmd);
 
   int repeatCounter = 10;
   while (!client.available() && repeatCounter--) {
-    Serial.println("y."); delay(500);
+    Serial.println("Waiting for response..."); delay(500);
   }
-  String line,buf="";
-  int startJson=0, dateFound=0;
-  while (client.connected() && client.available()) {
-    line = client.readStringUntil('\n');
-    Serial.println(line);
-    if(line[0]=='{') startJson=1;
-    if(startJson) {
-      for(int i=0;i<line.length();i++)
-        if(line[i]=='[' || line[i]==']') line[i]=' ';
-      buf+=line+"\n";
-    }
-    if(!dateFound && line.startsWith("Date: ")) {
-      dateFound = 1;
-      date = line.substring(6, 22);
-      h = line.substring(23, 25).toInt();
-      m = line.substring(26, 28).toInt();
-      s = line.substring(29, 31).toInt();
-      localMillisAtUpdate = millis();
-      localEpoc = (h * 60 * 60 + m * 60 + s);
-    }
-  }
-  Serial.println(buf);
-  client.stop();
 
-  DynamicJsonDocument jsonDoc(1024); // Adjust the size based on your JSON data
-  DeserializationError error = deserializeJson(jsonDoc, buf);
-  const JsonObject& root = jsonDoc.as<JsonObject>(); // Change to const reference
+  // Skip the response headers
+  while (client.available() && client.read() != '\r') {}
 
-  if (error) {
-    Serial.println("deserializeJson() failed");
-    printStringWithShift("json error!", 30, font, ' ');
+  // Find the starting position of the JSON sentence
+  String jsonStartMarker = "{";
+  String response = client.readString();
+  int jsonStartIndex = response.indexOf(jsonStartMarker);
+  if (jsonStartIndex == -1) {
+    Serial.println("Invalid JSON format: JSON sentence not found");
+    printStringWithShift("JSON error!", 30, font, ' ');
     delay(10);
     return -1;
   }
 
-  viewCount = root["items"]["statistics"]["viewCount"];
-  subscriberCount = root["items"]["statistics"]["subscriberCount"];
-  videoCount = root["items"]["statistics"]["videoCount"];
+  // Extract the JSON sentence
+  String jsonSentence = response.substring(jsonStartIndex);
+  Serial.println("JSON response:");
+  Serial.println(jsonSentence);
+
+  client.stop();
+
+  DynamicJsonDocument jsonDoc(4096);
+  DeserializationError error = deserializeJson(jsonDoc, jsonSentence);
+  if (error) {
+    Serial.print("deserializeJson() failed with code ");
+    Serial.println(error.code());
+    Serial.println(error.c_str());
+    printStringWithShift("JSON error!", 30, font, ' ');
+    delay(10);
+    return -1;
+  }
+
+  const JsonObject& root = jsonDoc.as<JsonObject>();
+  if (!root.containsKey("items") || root["items"].isNull() || !root["items"].is<JsonArray>() || root["items"].size() == 0) {
+    Serial.println("Invalid JSON format: 'items' array not found or empty");
+    printStringWithShift("JSON error!", 30, font, ' ');
+    delay(10);
+    return -1;
+  }
+
+  const JsonObject& channel = root["items"][0].as<JsonObject>();
+  if (!channel.containsKey("statistics")) {
+    Serial.println("Invalid JSON format: 'statistics' field not found");
+    printStringWithShift("JSON error!", 30, font, ' ');
+    delay(10);
+    return -1;
+  }
+
+  const JsonObject& statistics = channel["statistics"].as<JsonObject>();
+  if (!statistics.containsKey("viewCount") || !statistics.containsKey("subscriberCount") || !statistics.containsKey("videoCount")) {
+    Serial.println("Invalid JSON format: statistics fields not found");
+    printStringWithShift("JSON error!", 30, font, ' ');
+    delay(10);
+    return -1;
+  }
+
+  viewCount = statistics["viewCount"].as<long>();
+  subscriberCount = statistics["subscriberCount"].as<long>();
+  videoCount = statistics["videoCount"].as<long>();
+
+  Serial.print("Subscriber Count: ");
   Serial.println(subscriberCount);
+  Serial.print("View Count: ");
+  Serial.println(viewCount);
+  Serial.print("Video Count: ");
+  Serial.println(videoCount);
+
   return 0;
 }
 
