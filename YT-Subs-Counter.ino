@@ -37,9 +37,9 @@
 // =======================================================================
 // Your config below!
 // =======================================================================
-const char* ssid     = "";               // SSID of local network
-const char* password = "";             // Password on network
-String ytApiV3Key    = "";                // YouTube Data API v3 key generated here: https://console.developers.google.com
+const char* ssid     = "";   // SSID of local network
+const char* password = "";   // Password on network
+String ytApiV3Key    = "";   // YouTube Data API v3 key generated here: https://console.developers.google.com
 String channelId     = "";   // YT channel id
 // =======================================================================
 
