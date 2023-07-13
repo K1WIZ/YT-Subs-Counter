@@ -112,10 +112,10 @@ void loop()
   }
   cnt--;
 
-  int del = 3000;
-  int scrollDel = 40;
+  int del = 5000;
+  int scrollDel = 20;
 
-  printStringWithShift("  Subscribers: ", scrollDel, font, ' ');
+  printStringWithShift("  YouTube Subscribers: ", scrollDel, font, ' ');
   printValueWithShift(subscriberCount, scrollDel, 0);
   delay(del);
   if (subsGain1h) {
