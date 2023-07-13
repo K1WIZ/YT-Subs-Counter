@@ -49,7 +49,7 @@ void setup()
   Serial.begin(115200);
   initMAX7219();
   sendCmdAll(CMD_SHUTDOWN,1);
-  sendCmdAll(CMD_INTENSITY, 15); // Set brightness to maximum (15)
+  sendCmdAll(CMD_INTENSITY, 8); // Set brightness to maximum (15)
   Serial.print("Connecting WiFi ");
   WiFi.begin(ssid, password);
   printStringWithShift(" WiFi ...~",15,font,' ');
